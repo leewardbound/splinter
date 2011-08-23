@@ -27,6 +27,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from splinter.driver.webdriver.phantom import WebDriver as PhantomWebDriver
+    _DRIVERS['phantomjs'] = PhantomWebDriver
+except ImportError:
+    pass
+
 
 def Browser(driver_name='firefox', *args, **kwargs):
     """
@@ -46,3 +52,4 @@ def Browser(driver_name='firefox', *args, **kwargs):
         return driver(*args, **kwargs)
     except KeyError:
         raise DriverNotFoundError("No driver for %s" % driver_name)
+

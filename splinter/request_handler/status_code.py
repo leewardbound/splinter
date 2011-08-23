@@ -48,7 +48,7 @@ class StatusCode(object):
 
     def is_success(self):
         """
-        Returns ``True`` if the response was succed, otherwise, returns ``False``.
+        Returns ``True`` if the response succeeded, otherwise, returns ``False``.
         """
         if self.code not in self.http_errors:
             return True

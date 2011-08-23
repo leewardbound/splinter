@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-:
 """
-This module contains the basic API for splinter drivers and elemnts.
+This module contains the basic API for splinter drivers and elements.
 """
 
 from splinter.element_list import ElementList

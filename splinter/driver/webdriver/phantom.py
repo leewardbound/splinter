@@ -1,64 +1,74 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import signal
-import time
 
+from splinter.driver.webdriver import BaseWebDriver
+
+# automatically convert Qt types by using api 2
 import sip
+sip.setapi('QString', 2)
+sip.setapi('QVariant', 2)
 
-from splinter.driver.webdriver import BaseWebDriver, WebDriverElement
-from splinter.driver.webdriver.cookie_manager import CookieManager
+from pyphantomjs.phantom import Phantom
+from pyphantomjs.pyphantomjs import parseArgs
+from pyphantomjs.utils import SafeStreamFilter
 
-from pyphantomjs.webpage import WebPage
-
-from PyQt4.QtCore import SIGNAL, QUrl
 from PyQt4.QtGui import QApplication
 
-phantom_defaults = {
-    'loadImages': True,
-    'loadPlugins': False,
-    'javascriptEnabled': True,
-    'XSSAuditing': False,
-    'localAccessRemote': True,
-}
+# using pythons stdout and stderr, phantom replaces them
+if isinstance(sys.stdout, SafeStreamFilter):
+    sys.stdout = sys.stdout.target
+if isinstance(sys.stderr, SafeStreamFilter):
+    sys.stderr = sys.stderr.target
 
-# should emulate the selenium api so we can use the full BaseWebDriver power
-class WebkitDriver(WebPage):
+_executed = None
 
-    def get(self, url):
-        self.openUrl(url, 'get', phantom_defaults)
+import atexit
+@atexit.register
+def exec_app_atexit():
+    global _executed
+    if _executed is False:
+        _executed = True
+        QApplication.exec_()
 
-    @property
-    def current_url(self):
-        return str(self.m_mainFrame.url().toString())
+class NotAsynchronousCodeError(Exception):
+    def __str__(self):
+        return 'You should pass a callback to this function.'
 
-    @property
-    def title(self):
-        return str(self.m_mainFrame.title())
-
-    def quit(self):
-        QApplication.instance().quit()
+class WebpageError(Exception):
+    def __str__(self):
+        return 'Page "%s" could not be loaded.' % self.args[0]
 
 
 class WebDriver(BaseWebDriver):
     def __init__(self, *args, **kwargs):
         self.app = QApplication(sys.argv)
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
-        self.driver = WebkitDriver(self.app)
-        #self.element_class = WebDriverElement
-        #self._cookie_manager = CookieManager(self.driver)
+        self.phantom = Phantom(self.app, parseArgs(['bootstrap.js']))
         super(WebDriver, self).__init__(*args, **kwargs)
 
-    def loaded(self):
-        self._loaded = True
-        QApplication.instance().quit()
+    def visit(self, url, callback=None):
+        global _executed
+        _executed = False
 
-    def visit(self, url):
-        self._loaded = False
-        self.driver.loadFinished.connect(self.loaded)
-        super(WebDriver, self).visit(url)
-        QApplication.instance().exec_()
-        while not self._loaded:
-            time.sleep(0.01)
+        if callback is None:
+            raise NotAsynchronousCodeError
 
+        page = self.phantom.createWebPage()
+        def exit():
+            self.exit()
+            #self.phantom._destroy(page)
+            #if len(self.phantom.m_pages) == 1:
+                #self.phantom.exit()
+        def onload(status):
+            if status != 'success':
+                raise WebpageError(url)
+            callback(page, self, exit)
+        page.loadFinished.connect(onload)
+        page.openUrl(url, 'get', self.phantom.defaultPageSettings)
+
+    def execute(self):
+        exec_app_atexit()
+
+    def exit(self):
+        self.app.quit()
 
